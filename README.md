@@ -17,7 +17,7 @@
 
 #### 效果图
 
-<img src="./resources/pics/keyboard_input.gif" width="400" height="640" />
+<img src="./resources/pics/keyboard_input.gif" width="320" height="640" />
 
 #### 使用
 
