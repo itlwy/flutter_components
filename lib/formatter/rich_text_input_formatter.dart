@@ -47,11 +47,11 @@ class RichTextInputFormatter extends TextInputFormatter {
 
   RichTextInputFormatter(
       {@required TriggerAtCallback triggerAtCallback,
-        ValueChangedCallback valueChangedCallback,
-        @required this.controller,
-        this.triggerSymbol = "@",
-        this.unique = "_id",
-        this.showContent = "content"})
+      ValueChangedCallback valueChangedCallback,
+      @required this.controller,
+      this.triggerSymbol = "@",
+      this.unique = "_id",
+      this.showContent = "content"})
       : assert(triggerAtCallback != null && controller != null),
         _rules = [],
         _triggerAtCallback = triggerAtCallback,
@@ -71,7 +71,7 @@ class RichTextInputFormatter extends TextInputFormatter {
       /// adding
       if (newValue.text.length - oldValue.text.length == 1 &&
           newValue.text.substring(
-              newValue.selection.start - 1, newValue.selection.end) ==
+                  newValue.selection.start - 1, newValue.selection.end) ==
               triggerSymbol) {
         /// the adding char is [triggerSymbol]
         triggerAt(newValue);
@@ -79,7 +79,11 @@ class RichTextInputFormatter extends TextInputFormatter {
     } else {
       /// delete or replace content (include directly delete and select some segment to replace)
       /// 删除或替换内容 （含直接delete、选中后输入别的字符替换）
-      return checkRules(oldValue, newValue);
+      if (newValue.text.length < oldValue.text.length ||
+          oldValue.selection.start != oldValue.selection.end) {
+        /// 直接delete情况 / 选中一部分替换的情况
+        return checkRules(oldValue, newValue);
+      }
     }
     _valueChangedCallback?.call(rules, newValue.text);
     return newValue;
@@ -109,7 +113,7 @@ class RichTextInputFormatter extends TextInputFormatter {
         if (selStart < currentText.length) {
           /// 如果光标是在原来字符的中间
           newString =
-          "${currentText.substring(0, startIndex + 1)}${retMap[showContent]} ${currentText.substring(startIndex + 1, currentText.length)}";
+              "${currentText.substring(0, startIndex + 1)}${retMap[showContent]} ${currentText.substring(startIndex + 1, currentText.length)}";
         } else {
           /// 如果光标是在字符串最后面
           newString = "$currentText${retMap[showContent]} ";
@@ -131,6 +135,8 @@ class RichTextInputFormatter extends TextInputFormatter {
   /// 检查被删除/替换的内容是否涉及到rules里的特殊segment并处理，另外作字符的处理替换
   TextEditingValue checkRules(
       TextEditingValue oldValue, TextEditingValue newValue) {
+    /// 旧的文本的光标是否选中了部分
+    bool isOldSelectedPart = oldValue.selection.start != oldValue.selection.end;
     int startIndex = oldValue.selection.start;
     int endIndex = oldValue.selection.end;
 
@@ -138,15 +144,14 @@ class RichTextInputFormatter extends TextInputFormatter {
     List<Rule> delRules = [];
     for (int i = 0; i < _rules.length; i++) {
       Rule rule = _rules[i];
-      if ((startIndex >= rule.startIndex + 1 &&
-          startIndex <= rule.endIndex + 1) ||
+      if ((startIndex >= rule.startIndex && startIndex <= rule.endIndex) ||
           (endIndex >= rule.startIndex + 1 && endIndex <= rule.endIndex + 1)) {
         /// 原字符串选中的光标范围 与 rule的范围相交，命中
         delRules.add(rule);
 
         /// 对命中的rule 的边界与原字符串选中的光标边界比较，对原来的选中要被替换/删除的光标界限 进行扩展
         /// 用来自动覆盖@user 的全部字符
-        startIndex = math.min(startIndex, rule.startIndex + 1);
+        startIndex = math.min(startIndex, rule.startIndex);
         endIndex = math.max(endIndex, rule.endIndex + 1);
       }
     }
@@ -160,7 +165,7 @@ class RichTextInputFormatter extends TextInputFormatter {
     String newStartSelBeforeStr = newValue.text.substring(
         0, newValue.selection.start < 0 ? 0 : newValue.selection.start);
     String oldStartSelBeforeStr =
-    oldValue.text.substring(0, oldValue.selection.start);
+        oldValue.text.substring(0, oldValue.selection.start);
     String middleStr = "";
     if (newStartSelBeforeStr.length >= oldStartSelBeforeStr.length &&
         (oldValue.selection.end != oldValue.selection.start) &&
@@ -172,8 +177,20 @@ class RichTextInputFormatter extends TextInputFormatter {
       /// 此时为选中的删除时 没有增加新的字符串的情况
     }
 
-    String leftValue =
-        "${startIndex == 0 ? "" : oldValue.text.substring(0, startIndex - 1 > oldValue.text.length ? oldValue.text.length : startIndex - 1)}";
+    String leftValue;
+    int leftSubStringEndIndex;
+    if (isOldSelectedPart) {
+      /// 旧的text光标是选中了一部分的情况
+      leftSubStringEndIndex = startIndex > oldValue.text.length ? oldValue.text.length : startIndex;
+      leftValue =
+          "${startIndex == 0 ? "" : oldValue.text.substring(0, leftSubStringEndIndex)}";
+    } else {
+      /// 旧的text的光标是开始和结束在同一位置，即没选中部分，直接delete删除键响应
+      leftSubStringEndIndex = startIndex - 1 > oldValue.text.length ? oldValue.text.length : startIndex - 1;
+      leftValue =
+          "${startIndex == 0 ? "" : oldValue.text.substring(0, leftSubStringEndIndex)}";
+    }
+
     String middleValue = "$middleStr";
     String rightValue =
         "${endIndex == oldValue.text.length ? "" : oldValue.text.substring(endIndex, oldValue.text.length)}";
