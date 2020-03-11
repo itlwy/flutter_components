@@ -79,12 +79,16 @@ class RichTextInputFormatter extends TextInputFormatter {
     } else {
       /// delete or replace content (include directly delete and select some segment to replace)
       /// 删除或替换内容 （含直接delete、选中后输入别的字符替换）
-      if (newValue.text.length < oldValue.text.length ||
+      if (!oldValue.composing.isValid ||
           oldValue.selection.start != oldValue.selection.end) {
         /// 直接delete情况 / 选中一部分替换的情况
         return checkRules(oldValue, newValue);
       }
     }
+//    print(
+//        "=====>oldValue.composing start :${oldValue.composing.start},end :${oldValue.composing.end} .isValid : ${oldValue.composing.isValid} ,isCollapsed : ${oldValue.composing.isCollapsed},isNormalized : ${oldValue.composing.isNormalized}");
+//    print(
+//        "=====>newValue.composing start :${newValue.composing.start},end :${newValue.composing.end} .isValid : ${newValue.composing.isValid} ,isCollapsed : ${newValue.composing.isCollapsed},isNormalized : ${newValue.composing.isNormalized}");
     _valueChangedCallback?.call(rules, newValue.text);
     return newValue;
   }
@@ -137,7 +141,10 @@ class RichTextInputFormatter extends TextInputFormatter {
       TextEditingValue oldValue, TextEditingValue newValue) {
     /// 旧的文本的光标是否选中了部分
     bool isOldSelectedPart = oldValue.selection.start != oldValue.selection.end;
-    int startIndex = oldValue.selection.start;
+    /// 因为选中删除 和 直接delete删除的开始光标位置不一，故作统一处理
+    int startIndex = isOldSelectedPart
+        ? oldValue.selection.start
+        : oldValue.selection.start - 1;
     int endIndex = oldValue.selection.end;
 
     /// 用于迭代的时候不能删除的处理
@@ -177,19 +184,10 @@ class RichTextInputFormatter extends TextInputFormatter {
       /// 此时为选中的删除时 没有增加新的字符串的情况
     }
 
-    String leftValue;
-    int leftSubStringEndIndex;
-    if (isOldSelectedPart) {
-      /// 旧的text光标是选中了一部分的情况
-      leftSubStringEndIndex = startIndex > oldValue.text.length ? oldValue.text.length : startIndex;
-      leftValue =
-          "${startIndex == 0 ? "" : oldValue.text.substring(0, leftSubStringEndIndex)}";
-    } else {
-      /// 旧的text的光标是开始和结束在同一位置，即没选中部分，直接delete删除键响应
-      leftSubStringEndIndex = startIndex - 1 > oldValue.text.length ? oldValue.text.length : startIndex - 1;
-      leftValue =
-          "${startIndex == 0 ? "" : oldValue.text.substring(0, leftSubStringEndIndex)}";
-    }
+    int leftSubStringEndIndex =
+        startIndex > oldValue.text.length ? oldValue.text.length : startIndex;
+    String leftValue =
+        "${startIndex == 0 ? "" : oldValue.text.substring(0, leftSubStringEndIndex)}";
 
     String middleValue = "$middleStr";
     String rightValue =
