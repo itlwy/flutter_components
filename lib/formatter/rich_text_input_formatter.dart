@@ -16,6 +16,11 @@ class Rule {
     return Rule(startIndex ?? this.startIndex, endIndex ?? this.endIndex,
         params ?? Map.of(this.params ?? {}));
   }
+
+  @override
+  String toString() {
+    return "startIndex : $startIndex , endIndex : $endIndex, param :$params";
+  }
 }
 
 typedef TriggerAtCallback = Future<Map<String, dynamic>> Function(
@@ -74,7 +79,7 @@ class RichTextInputFormatter extends TextInputFormatter {
                   newValue.selection.start - 1, newValue.selection.end) ==
               triggerSymbol) {
         /// the adding char is [triggerSymbol]
-        triggerAt(newValue);
+        triggerAt(oldValue, newValue);
       }
     } else {
       /// delete or replace content (include directly delete and select some segment to replace)
@@ -89,13 +94,29 @@ class RichTextInputFormatter extends TextInputFormatter {
 //        "=====>oldValue.composing start :${oldValue.composing.start},end :${oldValue.composing.end} .isValid : ${oldValue.composing.isValid} ,isCollapsed : ${oldValue.composing.isCollapsed},isNormalized : ${oldValue.composing.isNormalized}");
 //    print(
 //        "=====>newValue.composing start :${newValue.composing.start},end :${newValue.composing.end} .isValid : ${newValue.composing.isValid} ,isCollapsed : ${newValue.composing.isCollapsed},isNormalized : ${newValue.composing.isNormalized}");
+    _correctRules(
+        oldValue.selection.start, oldValue.text.length, newValue.text.length);
     _valueChangedCallback?.call(rules, newValue.text);
     return newValue;
   }
 
+  /// 当长度发生变化需要对旧的受影响的rule修正索引
+  void _correctRules(int oldStartIndex, int oldLength, int newLength) {
+    /// old startIndex
+    int diffLength = newLength - oldLength;
+    for (int i = 0; i < _rules.length; i++) {
+      if (_rules[i].startIndex >= oldStartIndex) {
+        int newStartIndex = _rules[i].startIndex + diffLength;
+        int newEndIndex = _rules[i].endIndex + diffLength;
+        _rules.replaceRange(
+            i, i + 1, <Rule>[_rules[i].copy(newStartIndex, newEndIndex)]);
+      }
+    }
+  }
+
   /// trigger special callback
   /// 触发[triggerSymbol]操作
-  void triggerAt(TextEditingValue newValue) async {
+  void triggerAt(TextEditingValue oldValue, TextEditingValue newValue) async {
     /// 新值的选中光标的开始位置
     int selStart = newValue.selection.start;
     List<Map<String, dynamic>> params = [];
@@ -109,7 +130,8 @@ class RichTextInputFormatter extends TextInputFormatter {
       if (checkIfRepeat(retMap)) {
         controller.text =
             controller.text.substring(0, controller.text.length - 1);
-        _valueChangedCallback?.call(rules, controller.text);
+        _correctRules(oldValue.selection.start, oldValue.text.length,
+            newValue.text.length);
       } else {
         int startIndex = selStart - 1; // 新值的选中光标的后面一个的字符
         String newString;
@@ -130,9 +152,12 @@ class RichTextInputFormatter extends TextInputFormatter {
           baseOffset: endIndex + 1,
           extentOffset: endIndex + 1,
         );
+        _correctRules(
+            oldValue.selection.start, currentText.length, newString.length);
         _rules.add(Rule(startIndex, endIndex, retMap));
-        _valueChangedCallback?.call(rules, controller.text);
       }
+
+      _valueChangedCallback?.call(rules, controller.text);
     }
   }
 
@@ -141,6 +166,7 @@ class RichTextInputFormatter extends TextInputFormatter {
       TextEditingValue oldValue, TextEditingValue newValue) {
     /// 旧的文本的光标是否选中了部分
     bool isOldSelectedPart = oldValue.selection.start != oldValue.selection.end;
+
     /// 因为选中删除 和 直接delete删除的开始光标位置不一，故作统一处理
     int startIndex = isOldSelectedPart
         ? oldValue.selection.start
@@ -199,6 +225,9 @@ class RichTextInputFormatter extends TextInputFormatter {
       baseOffset: leftValue.length + middleValue.length,
       extentOffset: leftValue.length + middleValue.length,
     );
+
+    _correctRules(
+        oldValue.selection.start, oldValue.text.length, newValue.text.length);
 
     /// 为了解决小米note的兼容问题
     _flag = true;

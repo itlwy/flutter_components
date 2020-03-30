@@ -103,7 +103,7 @@ class _KeyboardInputAtPeoplePageState extends State<KeyboardInputAtPeoplePage> {
   }
 
   Future<bool> doneInput(List<Rule> rules, String value) async {
-    print("输入完成：  value - $value ,rules.length : ${rules.length}");
+    print("输入完成：  value - $value ,rules: $rules");
     richParam = {
       "contentText": "$value",
       "rules": rules
